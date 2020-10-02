@@ -8,11 +8,12 @@ output:
     toc_float: TRUE
     df_print: paged
     code_download: true
+    theme: journal
 ---
 
 
 ```{r setup, include=FALSE}
-#knitr::opts_chunk$set(echo = TRUE, error=TRUE, message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo = TRUE, error=TRUE, message=FALSE, warning=FALSE)
 ```
 
 ```{r libraries}
@@ -103,12 +104,13 @@ world <- get_stamenmap(
     maptype = "terrain",
     zoom = 2)  
 
-ggmap(world) + # creates the map "background"
+ggmap(world) + 
   geom_point(data = Starbucks, 
              aes(x = Longitude, y = Latitude, color = `Ownership Type`), 
              alpha = .3, 
              size = .1) +
-  theme_map()
+  theme_map() +
+  theme(legend.background = element_blank())
 ```
 
   2. Construct a new map of Starbucks locations in the Twin Cities metro area (approximately the 5 county metro area).  
@@ -125,12 +127,12 @@ ggmap(twin) +
              alpha = .5, 
              size = 2,
              color = "red") +
-  theme_map()
+  theme_map() 
 ```
 
   3. In the Twin Cities plot, play with the zoom number. What does it do?  (just describe what it does - don't actually include more than one map).  
 
-**The zoom level essentially determines the level of detail displayed on the map (the higher the zoom level, the greater the detail shown).**
+The zoom level essentially determines the level of detail displayed on the map (the higher the zoom level, the greater the detail shown).
 
   4. Try a couple different map types (see `get_stamenmap()` in help and look at `maptype`). Include a map with one of the other map types.  
 
@@ -138,6 +140,11 @@ ggmap(twin) +
 twin2 <- get_stamenmap(
     bbox = c(left = -93.9938, bottom = 44.6099, right = -92.3651, top = 45.2584), 
     maptype = "toner",
+    zoom = 10)
+
+twin3 <- get_stamenmap(
+    bbox = c(left = -93.9938, bottom = 44.6099, right = -92.3651, top = 45.2584), 
+    maptype = "watercolor",
     zoom = 10)
 
 ggmap(twin2) +
@@ -178,7 +185,45 @@ starbucks_with_2018_pop_est <-
 
   6. **`dplyr` review**: Look through the code above and describe what each line of code does.
 
+* reads in csv and saves dataset as `census_pop_est_2018`
+* separates the dot from the state name, and makes new column `dot`
+* selects all variables except `dot`
+* creates new variable `state` with all lower-case letters
+* creates new dataset name `starbucks_with_2018_pop_est` for the later code
+* starts with `starbucks_us_by_state` dataset
+* left joins with `census_pop_est_2018` dataset
+* coordinates the joining point to be through the state
+* creates new variable to measure Starbucks locations per 10,000 population
+
   7. Create a choropleth map that shows the number of Starbucks per 10,000 people on a map of the US. Use a new fill color, add points for all Starbucks in the US (except Hawaii and Alaska), add an informative title for the plot, and include a caption that says who created the plot (you!). Make a conclusion about what you observe.
+
+```{r, fig.height=6}
+states_map <- map_data("state")
+
+
+starbucks_with_2018_pop_est %>% 
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state_name,
+               fill = starbucks_per_10000)) +
+  geom_point(data = Starbucks %>%
+               filter(`Country` == "US") %>%
+               filter(`State/Province` != "AK") %>% 
+               filter(`State/Province` != "HI"),
+             aes(x = Longitude, y = Latitude),
+             size = .05,
+             alpha = .2, 
+             color = "green") +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  labs(title = "Starbucks Locations in the United States",
+       fill = "Locations per 10,000 People",
+       caption = "Created by Erik Hager") +
+  scale_fill_viridis_c(option = "inferno") +
+  theme_map() +
+  theme(legend.background = element_blank()) 
+```
+
+The majority of Starbucks locations are clustered around major cities, and the West Coast has the most Starbucks per capita.
 
 ### A few of your favorite things (`leaflet`)
 
@@ -191,7 +236,37 @@ starbucks_with_2018_pop_est <-
   * Connect all your locations together with a line in a meaningful way (you may need to order them differently in the original data).  
   
   * If there are other variables you want to add that could enhance your plot, do that now.  
-  
+
+```{r}
+favorite_erik <- tibble(
+  place = c("Home", "Macalester College", "Valley Fair", 
+            "Barn Bluff", "Taylors Falls", "Current House",
+            "Lakeville South High School", "Target Field", "Cooperstown Dreams Park", "Kauffman Stadium"),
+  longitude = c(-93.23234, -93.1712321, -93.4549, 
+           -92.5322, -92.6621, -93.17400, 
+           -93.27240, -93.27787, -74.9598, -94.48055),
+  latitude = c(44.65044, 44.9378965, 44.7990,
+          44.5701, 45.3931, 44.93315, 
+          44.64280, 44.98169, 42.6417, 39.05143),
+  top3 = c("yes", "yes","yes", "no", "no", "no", "no", "no", "no", "no"))
+
+pal <- colorFactor(c("blue", "red"),
+                     domain = c("no", "yes"))
+
+favorite_erik
+
+leaflet(data = favorite_erik) %>% 
+  addProviderTiles(providers$Stamen.Terrain) %>% 
+  addCircles(label = ~place,
+             weight = 10,
+             opacity = 1,
+             color = ~pal(top3)) %>% 
+  addPolylines(lng = ~longitude, 
+               lat = ~latitude,
+               color = col2hex("goldenrod"))
+```
+
+
 ## Revisiting old datasets
 
 This section will revisit some datasets we have used previously and bring in a mapping component. 
@@ -205,7 +280,7 @@ Two data tables are available:
 - `Trips` contains records of individual rentals
 - `Stations` gives the locations of the bike rental stations
 
-Here is the code to read in the data. We do this a little differently than usualy, which is why it is included here rather than at the top of this file. To avoid repeatedly re-reading the files, start the data import chunk with `{r cache = TRUE}` rather than the usual `{r}`. This code reads in the large dataset right away.
+Here is the code to read in the data. We do this a little differently than usually, which is why it is included here rather than at the top of this file. To avoid repeatedly re-reading the files, start the data import chunk with `{r cache = TRUE}` rather than the usual `{r}`. This code reads in the large dataset right away.
 
 ```{r cache=TRUE}
 data_site <- 
@@ -217,47 +292,186 @@ Stations<-read_csv("http://www.macalester.edu/~dshuman1/data/112/DC-Stations.csv
   9. Use the latitude and longitude variables in `Stations` to make a visualization of the total number of departures from each station in the `Trips` data. Use either color or size to show the variation in number of departures. This time, plot the points on top of a map. Use any of the mapping tools you'd like.
   
 ```{r}
+trips_stations <- Trips %>% 
+  rename(name = sstation) %>% 
+  left_join(Stations, by = "name") %>% 
+  group_by(name, lat, long) %>% 
+  summarize(numDep = n())
 
+dc <- get_stamenmap(
+    bbox = c(left = -77.2119, bottom = 38.7817, right = -76.8377, top = 39.0021), 
+    maptype = "terrain",
+    zoom = 12)
+ggmap(dc) + 
+  geom_point(data = trips_stations, 
+             aes(x = long, y = lat, size = numDep), 
+             alpha = .6,
+             color = "darkblue") +
+  theme_map() +
+  labs(title = "Bicycle Rentals by Station",
+       size = "Number of Departures")
 ```
   
   10. Only 14.4% of the trips in our data are carried out by casual users. Create a plot that shows which area(s) have stations with a much higher percentage of departures by casual users. What patterns do you notice? Also plot this on top of a map. I think it will be more clear what the patterns are.
   
 ```{r}
-
+trips_cas <- Trips %>% 
+  rename(name = sstation) %>% 
+  filter(client ==  "Casual") %>% 
+  left_join(Stations, by = "name") %>% 
+  group_by(name, lat, long) %>% 
+  summarize(num_dep = n())
+ggmap(dc) + 
+  geom_point(data = trips_cas, 
+             aes(x = long, y = lat, size = num_dep), 
+             alpha = .6,
+             color = "darkblue") +
+  theme_map() +
+  labs(title = "Casual Bike Rentals",
+       size = "Number of Departures")
 ```
-  
+
+ There is a much lower concentration of departures in the middle of DC, however the departures on the outer parts of DC seem to remain the same. This shows that the majority of registered users probably live within the middle of DC, while the casual users live on the outer parts.
+
 ### COVID-19 data
 
 The following exercises will use the COVID-19 data from the NYT.
 
   11. Create a map that colors the states by the most recent cumulative number of COVID-19 cases (remember, these data report cumulative numbers so you don't need to compute that). Describe what you see. What is the problem with this map?
   
+```{r}
+covid_total <- covid19 %>% 
+  group_by(state) %>% 
+  mutate(state = str_to_lower(state)) %>% 
+  summarise(total_cases = max(cases))
+  
+covid_total %>% 
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state,
+               fill = total_cases)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  theme_map() + 
+  labs(title = "Covid-19 Cases by State", fill = "Cumulative Cases")
+```
+
+This map mostly only reflects the population of each state, since population wasn't controlled for; the states with the ost cases are mainly just the most populous states. 
+ 
   12. Now add the population of each state to the dataset and color the states by most recent cumulative cases/10,000 people. See the code for doing this with the Starbucks data. You will need to make some modifications. 
-  
+
+```{r}
+covid_totalt <- covid_total %>% 
+  left_join(census_pop_est_2018,
+            by = "state") %>% 
+  mutate(casesPer10000 = (total_cases/est_pop_2018)*10000) 
+covid_total
+```
+
   13. **CHALLENGE** Choose 4 dates spread over the time period of the data and create the same map as in exercise 12 for each of the dates. Display the four graphs together using faceting. What do you notice?
+
+```{r}
+covid_date <- covid19 %>% 
+  filter(date %in% c(mdy("03/15/2020"), mdy("05/15/2020"), mdy("07/15/2020"), mdy("09/15/2020"))) %>% 
+  group_by(state) %>% 
+  mutate(state = str_to_lower(state)) %>% 
+  left_join(census_pop_est_2018,
+            by = "state") %>% 
+  mutate(casesPer10000 = (cases/est_pop_2018)*10000) 
+covid_date %>% 
+  ggplot() +
+  geom_map(map = states_map,
+           aes(map_id = state,
+               fill = casesPer10000)) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  theme_map() + 
+  facet_wrap(~date) +
+  theme(legend.position = "right") +
+  labs(title = "Covid Cases by State", fill = "Cumulative Cases/10,000 People")
+```
+
+Covid-19 cases grew slowly during the beginning of 2020, but accelerated as the year wore on. Cases grew fastest in the South.
   
+ 
 ## Minneapolis police stops
 
 These exercises use the datasets `MplsStops` and `MplsDemo` from the `carData` library. Search for them in Help to find out more information.
 
   14. Use the `MplsStops` dataset to find out how many stops there were for each neighborhood and the proportion of stops that were for a suspicious vehicle or person. Sort the results from most to least number of stops. Save this as a dataset called `mpls_suspicious` and display the table.  
-  
+
+```{r}
+suspicious <- MplsStops %>% 
+  group_by(neighborhood) %>% 
+  summarize(num_stops = cumsum(n()), prop_sus = mean(problem == "suspicious")) %>% 
+  arrange(desc(num_stops))
+suspicious
+```
+ 
   15. Use a `leaflet` map and the `MplsStops` dataset to display each of the stops on a map as a small point. Color the points differently depending on whether they were for suspicious vehicle/person or a traffic stop (the `problem` variable). HINTS: use `addCircleMarkers`, set `stroke = FAlSE`, use `colorFactor()` to create a palette.  
+
+```{r}
+pal2 <- colorFactor(c("red", "blue"),
+                    domain = c("suspicious", "traffic"))
+MplsStops %>% 
+  leaflet() %>% 
+  addProviderTiles(providers$Stamen.Terrain) %>% 
+  addCircles(lng = ~long, 
+             lat = ~lat, 
+             weight = .5,
+             opacity = 1,
+             color = ~pal2(problem))
+```
   
   16. Save the folder from moodle called Minneapolis_Neighborhoods into your project/repository folder for this assignment. Make sure the folder is called Minneapolis_Neighborhoods. Use the code below to read in the data and make sure to **delete the `eval=FALSE`**. Although it looks like it only links to the .sph file, you need the entire folder of files to create the `mpls_nbhd` data set. These data contain information about the geometries of the Minneapolis neighborhoods. Using the `mpls_nbhd` dataset as the base file, join the `mpls_suspicious` and `MplsDemo` datasets to it by neighborhood (careful, they are named different things in the different files). Call this new dataset `mpls_all`.
 
-```{r, eval=FALSE}
+```{r}
 mpls_nbhd <- st_read("Minneapolis_Neighborhoods/Minneapolis_Neighborhoods.shp", quiet = TRUE)
 ```
 
+```{r}
+mpls_dem <- mpls_suspicious %>% 
+  left_join(MplsDemo, by = "neighborhood")
+
+mpls_all <- mpls_nbhd %>% 
+  left_join(mpls_dem, by = c("BDNAME" = "neighborhood")) %>% 
+  rename("neighborhood" = "BDNAME")
+```
   17. Use `leaflet` to create a map from the `mpls_all` data  that colors the neighborhoods by `prop_suspicious`. Display the neighborhood name as you scroll over it. Describe what you observe in the map.
+
+```{r}
+pal3 <- colorNumeric("Reds",
+                    domain = mpls_all$propSus)
+mpls_all %>% 
+  leaflet() %>% 
+  addProviderTiles(providers$Stamen.Terrain) %>% 
+  addPolygons(label = ~neighborhood,
+             weight = .7,
+             opacity = 1,
+             color = ~pal3(propSus))
+```
   
+The majority of suspicious activity is in the southeastern part of Minneapolis, with small pockets in the northwest and southwest corners.
+
   18. Use `leaflet` to create a map of your own choosing. Come up with a question you want to try to answer and use the map to help answer that question. Describe what your map shows. 
   
+**Question**: What is the distribution of traffic stops and suspicious activity among people of color in Minneapolis?
   
+```{r}
+MplsStops %>% 
+  filter(race != c("white", "unknown")) %>% 
+  leaflet() %>% 
+  addProviderTiles(providers$Stamen.Terrain) %>% 
+  addCircles(lng = ~long, 
+             lat = ~lat, 
+             weight = .6,
+             opacity = 1,
+             color = ~pal2(problem))  
+```
+  
+Suspicious activity for people of color is relatively evenly distributed across the city, while traffic stops are common everywhere except the southeast.
+
 ## GitHub link
 
   19. Below, provide a link to your GitHub page with this set of Weekly Exercises. Specifically, if the name of the file is 04_exercises.Rmd, provide a link to the 04_exercises.md file, which is the one that will be most readable on GitHub.
 
 
-**DID YOU REMEMBER TO UNCOMMENT THE OPTIONS AT THE TOP?**
+
